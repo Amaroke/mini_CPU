@@ -72,7 +72,7 @@ void setValue(int *word, int n)
   int nb = n;
   if (n >= 0)
   {
-    for (int i = 0; i < NBITS ; i++)
+    for (int i = 0; i < NBITS; i++)
     {
       word[i] = nb % 2;
       nb = nb / 2;
