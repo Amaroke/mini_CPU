@@ -241,7 +241,13 @@ int get(int *word, int bitIndex)
  */
 void setZ(ALU alu)
 {
-  // à compléter
+  for (int i = 0; i < NBITS; ++i)
+  {
+    if (get(alu.accu, i))
+    {
+      set(alu.flags, 0, 0);
+    }
+  }
 }
 
 /////////////////////////////////////////////////////////
@@ -254,7 +260,8 @@ void setZ(ALU alu)
  */
 void pass(ALU alu, int *B)
 {
-  // à compléter
+  copyValue(alu.accu, B);
+  setZ(alu);
 }
 
 /*
@@ -262,7 +269,11 @@ void pass(ALU alu, int *B)
  */
 void nand(ALU alu, int *B)
 {
-  // à compléter
+  for (int i = 0; i < NBITS; ++i)
+  {
+    set(alu.accu, i, get(alu.accu, i) ? 0 : 1);
+  }
+  setZ(alu);
 }
 
 /*
@@ -270,7 +281,11 @@ void nand(ALU alu, int *B)
  */
 void shift(ALU alu)
 {
-  // à compléter
+  for (int i = 0; i < NBITS - 1; ++i)
+  {
+    set(alu.accu, i, get(alu.accu, i + 1));
+  }
+  setZ(alu);
 }
 
 /*
@@ -280,7 +295,37 @@ void shift(ALU alu)
 int *fullAdder(int a, int b, int c_in)
 {
   int *res = (int *)malloc(2 * sizeof(int));
-  // à compléter
+  res[0] = 0; //s
+  res[1] = 0; //c_out
+  if (!a && !b && c_in)
+  {
+    res[0] = 1;
+  }
+  else if (!a && b && !c_in)
+  {
+    res[0] = 1;
+  }
+  else if (!a && b && c_in)
+  {
+    res[1] = 1;
+  }
+  else if (a && !b && !c_in)
+  {
+    res[0] = 1;
+  }
+  else if (a && !b && c_in)
+  {
+    res[1] = 1;
+  }
+  else if (a && b && !c_in)
+  {
+    res[1] = 1;
+  }
+  else if (a && b && c_in)
+  {
+    res[0] = 1;
+    res[1] = 1;
+  }
   return res;
 }
 
@@ -290,7 +335,16 @@ int *fullAdder(int a, int b, int c_in)
  */
 void add(ALU alu, int *B)
 {
-  // à compléter
+  int *res = (int *)malloc(2 * sizeof(int));
+  for (int i = 0; i < NBITS; ++i)
+  {
+    res = fullAdder(alu.accu[i], B[i], alu.flags[1]);
+    alu.accu[i] = res[0];
+    alu.flags[1] = res[1];
+  }
+  alu.flags[2] = alu.flags[1];
+  alu.flags[1] = 0;
+  setZ(alu);
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -302,7 +356,7 @@ void add(ALU alu, int *B)
  */
 void not(CPU cpu)
 {
-  // à compléter
+  nand(cpu.alu, cpu.alu.accu);
 }
 
 /*
@@ -310,7 +364,8 @@ void not(CPU cpu)
  */
 void and (CPU cpu, int *B)
 {
-  // à compléter
+  nand(cpu.alu, B);
+  not(cpu);
 }
 
 /*
@@ -318,26 +373,39 @@ void and (CPU cpu, int *B)
  */
 void or (CPU cpu, int *B)
 {
-  // à compléter
+  nand(cpu.alu, cpu.alu.accu);
+  copyValue(cpu.R0, cpu.alu.accu);
+  pass(cpu.alu, B);
+  nand(cpu.alu, cpu.alu.accu);
+  nand(cpu.alu, cpu.R0);
 }
 
 /*
  * Xor.
  */
 void xor (CPU cpu, int *B) {
-  // à compléter
+  copyValue(cpu.R0, cpu.alu.accu); // Stockage de A dans R0
+  copyValue(cpu.R1, B);            // Stockage de B dans R1
+  nand(cpu.alu, B);                // A NAND B
+  copyValue(cpu.R2, cpu.alu.accu); // Stockage de A NAND B dans R2
+  pass(cpu.alu, cpu.R0);           // Stockage de RO dans A
+  nand(cpu.alu, cpu.R2);           // (A NAND B) NAND A
+  pass(cpu.alu, cpu.R0);           // Stockage de (A NAND B) NAND A dans R0
+  copyValue(cpu.alu.accu, cpu.R2); // Stockage de A NAND B dans A
+  nand(cpu.alu, cpu.R1);           // (A NAND B) NAND B
+  pass(cpu.alu, cpu.R1);           // Stockage de (A NAND B) NAND B dans A
+  nand(cpu.alu, cpu.R0);           // (A NAND B) NAND B NAND (A NAND B) NAND A
 }
 
     /*
- * Décale le receveur de |n| positions.
- * Le décalage s'effectue vers la gauche si n>0 vers la droite dans le cas contraire.
- * C'est un décalage logique (pas de report du bit de signe dans les positions 
- * libérées en cas de décalage à droite).
- * L'indicateur CF est positionné avec le dernier bit "perdu".
- */
+  * Décale le receveur de |n| positions.
+  * Le décalage s'effectue vers la gauche si n>0 vers la droite dans le cas contraire.
+  * C'est un décalage logique (pas de report du bit de signe dans les positions 
+  * libérées en cas de décalage à droite).
+  * L'indicateur CF est positionné avec le dernier bit "perdu".
+  */
     void logicalShift(CPU cpu, int n)
 {
-  // à compléter
 }
 
 /////////////////////////////////////////////////////////
@@ -388,7 +456,7 @@ int main(int argc, char *argv[])
   int go_on = 1;
 
   char *menu =
-      "              Programme de test\n\n0  Quitter\n1  setValue(operande,int)\n2  pass(alu,operande)\n3  printing(alu)\n4  afficher toString(operande)\n5  afficher intValue(operande)\n6  afficher intValue(accu)\n7  accu=nand(accu,operande)\n8  accu=add(accu,operande)\n9  accu=sub(accu,operande)\n10  accu=and(accu,operande)\n11 accu=or(accu,operande)\n12 accu=xor(accu,operande)\n13 accu=not(accu)\n14 accu=opp(accu)\n15 accu=shift(accu)\n16 accu=logicalShift(accu,int)\n17 accu=mul(accu,operande)\n\n";
+      "              Programme de test\n\n0  Quitter\n1  setValue(operande,int)\n2  pass(alu,operande)\n3  printing(alu)\n4  afficher toString(operande)\n5  afficher intValue(operande)\n6  afficher intValue(accu)\n7  accu=nand(accu,operande)\n8  accu=add(accu,operande)\n9  accu=sub(accu,operande)\n10 accu=and(accu,operande)\n11 accu=or(accu,operande)\n12 accu=xor(accu,operande)\n13 accu=not(accu)\n14 accu=opp(accu)\n15 accu=shift(accu)\n16 accu=logicalShift(accu,int)\n17 accu=mul(accu,operande)\n\n";
 
   char *invite = "--> Quel est votre choix  ? ";
 
