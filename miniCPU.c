@@ -261,7 +261,10 @@ void setZ(ALU alu)
 void pass(ALU alu, int *B)
 {
   copyValue(alu.accu, B);
-  setZ(alu);
+  setZ(alu);                                   //Gestion de zero-flag.
+  set(alu.flags, 1, 0);                        //Gestion de carry-flag.
+  set(alu.flags, 2, 0);                        //Gestion de overflow-flag.
+  set(alu.flags, 3, get(alu.accu, NBITS - 1)); //Gestion de negative-flag.
 }
 
 /*
@@ -273,7 +276,10 @@ void nand(ALU alu, int *B)
   {
     set(alu.accu, i, get(alu.accu, i) ? 0 : 1);
   }
-  setZ(alu);
+  setZ(alu);                                   //Gestion de zero-flag.
+  set(alu.flags, 1, 0);                        //Gestion de carry-flag.
+  set(alu.flags, 2, 0);                        //Gestion de overflow-flag.
+  set(alu.flags, 3, get(alu.accu, NBITS - 1)); //Gestion de negative-flag.
 }
 
 /*
@@ -285,7 +291,10 @@ void shift(ALU alu)
   {
     set(alu.accu, i, get(alu.accu, i + 1));
   }
-  setZ(alu);
+  setZ(alu);                                   //Gestion de zero-flag.
+  set(alu.flags, 1, 0);                        //Gestion de carry-flag.
+  set(alu.flags, 2, 0);                        //Gestion de overflow-flag.
+  set(alu.flags, 3, get(alu.accu, NBITS - 1)); //Gestion de negative-flag.
 }
 
 /*
@@ -295,36 +304,36 @@ void shift(ALU alu)
 int *fullAdder(int a, int b, int c_in)
 {
   int *res = (int *)malloc(2 * sizeof(int));
-  res[0] = 0; //s
-  res[1] = 0; //c_out
+  set(res, 0, 0); //s = 0
+  set(res, 1, 0); //c_out = 0
   if (!a && !b && c_in)
   {
-    res[0] = 1;
+    set(res, 0, 1);
   }
   else if (!a && b && !c_in)
   {
-    res[0] = 1;
+    set(res, 0, 1);
   }
   else if (!a && b && c_in)
   {
-    res[1] = 1;
+    set(res, 1, 1);
   }
   else if (a && !b && !c_in)
   {
-    res[0] = 1;
+    set(res, 0, 1);
   }
   else if (a && !b && c_in)
   {
-    res[1] = 1;
+    set(res, 1, 1);
   }
   else if (a && b && !c_in)
   {
-    res[1] = 1;
+    set(res, 1, 1);
   }
   else if (a && b && c_in)
   {
-    res[0] = 1;
-    res[1] = 1;
+    set(res, 0, 1);
+    set(res, 1, 1);
   }
   return res;
 }
@@ -338,13 +347,14 @@ void add(ALU alu, int *B)
   int *res = (int *)malloc(2 * sizeof(int));
   for (int i = 0; i < NBITS; ++i)
   {
-    res = fullAdder(alu.accu[i], B[i], alu.flags[1]);
-    alu.accu[i] = res[0];
-    alu.flags[1] = res[1];
+    res = fullAdder(get(alu.accu, i), get(B, i), get(alu.flags, 1));
+    set(alu.accu, i, get(res, 0));
+    set(alu.flags, 1, get(res, 1));
   }
-  alu.flags[2] = alu.flags[1];
-  alu.flags[1] = 0;
-  setZ(alu);
+  setZ(alu);                                   //Gestion de zero-flag.
+  set(alu.flags, 2, get(alu.flags, 1));        //overflow-flag récupère carry-flag.
+  set(alu.flags, 1, 0);                        //Reset de carry-flag;
+  set(alu.flags, 3, get(alu.accu, NBITS - 1)); //Gestion de negative-flag.
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -398,14 +408,42 @@ void xor (CPU cpu, int *B) {
 }
 
     /*
-  * Décale le receveur de |n| positions.
-  * Le décalage s'effectue vers la gauche si n>0 vers la droite dans le cas contraire.
-  * C'est un décalage logique (pas de report du bit de signe dans les positions 
-  * libérées en cas de décalage à droite).
-  * L'indicateur CF est positionné avec le dernier bit "perdu".
-  */
+ * Décale le receveur de |n| positions.
+ * Le décalage s'effectue vers la gauche si n>0 vers la droite dans le cas contraire.
+ * C'est un décalage logique (pas de report du bit de signe dans les positions 
+ * libérées en cas de décalage à droite).
+ * L'indicateur CF est positionné avec le dernier bit "perdu".
+ */
     void logicalShift(CPU cpu, int n)
 {
+  if (n > 0)
+  {
+    for (int i = n; i > 0; --i)
+    {
+      set(cpu.alu.flags, 1, get(cpu.alu.accu, NBITS - 1));
+      for (int j = NBITS - 1; j > 0; --j)
+      {
+        set(cpu.alu.accu, j, get(cpu.alu.accu, j - 1));
+      }
+      set(cpu.alu.accu, 0, 0);
+    }
+  }
+  else
+  {
+    for (int i = 0; i > n; --i)
+    {
+      set(cpu.alu.flags, 1, get(cpu.alu.accu, 0));
+      for (int j = 1; j < NBITS - 1; ++j)
+      {
+        set(cpu.alu.accu, j, get(cpu.alu.accu, j + 1));
+      }
+      set(cpu.alu.accu, NBITS - 1, 0);
+    }
+  }
+  setZ(cpu.alu);                                       //Gestion de zero-flag.
+  set(cpu.alu.flags, 1, 0);                            //Gestion de carry-flag.
+  set(cpu.alu.flags, 2, 0);                            //Gestion de overflow-flag.
+  set(cpu.alu.flags, 3, get(cpu.alu.accu, NBITS - 1)); //Gestion de negative-flag.
 }
 
 /////////////////////////////////////////////////////////
@@ -417,7 +455,8 @@ void xor (CPU cpu, int *B) {
  */
 void opp(CPU cpu)
 {
-  // à compléter
+  not(cpu);
+  add(cpu.alu, initWord(1));
 }
 
 /*
@@ -425,7 +464,12 @@ void opp(CPU cpu)
  */
 void sub(CPU cpu, int *B)
 {
-  // à compléter
+  copyValue(cpu.R0, cpu.alu.accu);
+  copyValue(cpu.alu.accu, B);
+  opp(cpu);
+  copyValue(cpu.R1, cpu.alu.accu);
+  copyValue(cpu.alu.accu, cpu.R0);
+  add(cpu.alu, cpu.R1);
 }
 
 /*
@@ -433,7 +477,7 @@ void sub(CPU cpu, int *B)
  */
 void mul(CPU cpu, int *B)
 {
-  // à compléter
+  
 }
 
 /////////////////////////////////////////////////////////
