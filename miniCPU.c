@@ -351,8 +351,15 @@ void add(ALU alu, int *B)
     set(alu.accu, i, get(res, 0));
     set(alu.flags, 1, get(res, 1));
   }
-  setZ(alu);                                   //Gestion de zero-flag.
-  set(alu.flags, 2, get(alu.flags, 1));        //overflow-flag récupère carry-flag.
+  setZ(alu); //Gestion de zero-flag.
+  if (get(alu.flags, 1) == get(fullAdder(get(alu.accu, NBITS - 1), get(B, NBITS - 1), get(alu.flags, 1)), 1))
+  {
+    set(alu.flags, 2, 1); //Si la dernière et l'avant dernière retenue sont identiques il y a dépassement (carry-overflag).
+  }
+  else
+  {
+    set(alu.flags, 2, 0);
+  }
   set(alu.flags, 1, 0);                        //Reset de carry-flag;
   set(alu.flags, 3, get(alu.accu, NBITS - 1)); //Gestion de negative-flag.
 }
@@ -383,11 +390,11 @@ void and (CPU cpu, int *B)
  */
 void or (CPU cpu, int *B)
 {
-  nand(cpu.alu, cpu.alu.accu);
-  copyValue(cpu.R0, cpu.alu.accu);
-  pass(cpu.alu, B);
-  nand(cpu.alu, cpu.alu.accu);
-  nand(cpu.alu, cpu.R0);
+  nand(cpu.alu, cpu.alu.accu);     //A NAND A
+  copyValue(cpu.R0, cpu.alu.accu); // Stockage de A NAND A dans RO
+  pass(cpu.alu, B);                // Stockage de B dans A
+  nand(cpu.alu, cpu.alu.accu);     // B NAND B
+  nand(cpu.alu, cpu.R0);           // (B NAND B) NAND (A NAND A)
 }
 
 /*
@@ -441,7 +448,6 @@ void xor (CPU cpu, int *B) {
     }
   }
   setZ(cpu.alu);                                       //Gestion de zero-flag.
-  set(cpu.alu.flags, 1, 0);                            //Gestion de carry-flag.
   set(cpu.alu.flags, 2, 0);                            //Gestion de overflow-flag.
   set(cpu.alu.flags, 3, get(cpu.alu.accu, NBITS - 1)); //Gestion de negative-flag.
 }
@@ -464,11 +470,12 @@ void opp(CPU cpu)
  */
 void sub(CPU cpu, int *B)
 {
+  // On additione l'opposé.
   copyValue(cpu.R0, cpu.alu.accu);
-  copyValue(cpu.alu.accu, B);
+  pass(cpu.alu, B);
   opp(cpu);
   copyValue(cpu.R1, cpu.alu.accu);
-  copyValue(cpu.alu.accu, cpu.R0);
+  pass(cpu.alu, cpu.R0);
   add(cpu.alu, cpu.R1);
 }
 
@@ -477,7 +484,22 @@ void sub(CPU cpu, int *B)
  */
 void mul(CPU cpu, int *B)
 {
-  
+  // Ne fonctionne pas avec des négatids et ne gère pas les flags
+  copyValue(cpu.R0, cpu.alu.accu); //Stockage de A dans R0
+  copyValue(cpu.R1, B);            //Stockage de B dans R1
+  copyValue(cpu.alu.accu, word()); //Reset de l'accu
+  for (int i = 0; i < NBITS; i++)
+  {
+    if (get(cpu.R0, i))
+    {
+      add(cpu.alu, cpu.R1); //Si B[i] != 0 alors A + B
+    }
+    copyValue(cpu.R2, cpu.alu.accu); //Stockage de R2 dans A
+    copyValue(cpu.alu.accu, cpu.R1); //Stockage de A dans R1
+    logicalShift(cpu, 1);            //Décalage
+    copyValue(cpu.R1, cpu.alu.accu); //Stockage de R1 dans A
+    copyValue(cpu.alu.accu, cpu.R2); //Stockage de A dans R2
+  }
 }
 
 /////////////////////////////////////////////////////////
